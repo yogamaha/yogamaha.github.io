@@ -368,7 +368,7 @@ function show_medal_details(data, xaxis_tick_mapper, next_scene_caller, sort_dat
 	legend_svg = d3.select("#legend").append("svg")
 		.attr("width", heading_setting.width)
 		.attr("height", heading_setting.height)
-		.append("g").selectAll()
+		.append("g")//.selectAll()
 
 	legend_svg.selectAll("random")
 	  .data(subgroups)
@@ -567,21 +567,21 @@ function build_scene_1() {
 
 function build_scene_2() {
 	scene = build_scene_2;
-	year = 1950;
+	year = 1936;
 	scene_name = "Scene-2";
 	build_scene(year, scene, scene_name)
 }
 
 function build_scene_3() {
 	scene = build_scene_3;
-	year = 1984;
+	year = 1968;
 	scene_name = "Scene-3";
 	build_scene(year, scene, scene_name)
 }
 
 function build_scene_4() {
 	scene = build_scene_4;
-	year = 2000;
+	year = 1984;
 	scene_name = "Scene-4";
 	build_scene(year, scene, scene_name)
 }
@@ -589,7 +589,7 @@ function build_scene_4() {
 
 function build_scene_5() {
 	scene = build_scene_5;
-	year = 2020;
+	year = 2016;
 	scene_name = "Scene-5";
 	build_scene(year, scene, scene_name)
 }
@@ -710,11 +710,13 @@ function show_line_chart(year, scene_name, data, next_scene_caller) {
 		.attr("height", settings.height + 2*settings.margin + 100)
 
 country_list = ["USA", "Russia", "China", "UK", "France", "Japan", "Germany", "Sweden"]
+//country_list = ["USA", "Russia", "China"]
 summary_filter = d => d[1] <= year && country_list.indexOf(d[0]) > -1
 //summary_filter = d => d.Season == "Summer" && ["USA"].indexOf(d.Region) > -1  //&& d.Year <= 1950
 data = d3.filter(data, summary_filter)
 
-x_points = data.map(d => d[1])
+x_points = data.map(d => d[1]).sort((a,b) => d3.ascending(a, b))
+//x_axis_map = new Map(data.map(d => [d[1], d[1] + " " + d[2]]).sort((a,b) => d3.ascending(a[0], b[0])))
 
 var data = d3.groups(data, d => d[0]);
 
@@ -818,29 +820,63 @@ svg.append('g')
 				update_medal_details_drilldown();
 		     })
 
+	  annotations = [
+	  	{
+        	note: {
+            	title: "Phase 1",
+            	label: "Till 1920, host nations are the leaders in Medals table"
+          	},
+	  		year: "1920"
+	  	},
+	  	{
+        	note: {
+            	title: "Phase 2",
+            	label: "World war 2 era - Emergence of USA & Germany as big powers in the world reflects in the Olympics medal table"
+          	},
+	  		year: "1936"
+	  	},
+	  	{
+        	note: {
+            	title: "Phase 3",
+            	label: "Post World War - USA & Russia emerging as the new super powers"
+          	},
+	  		year: "1968"
+	  	},
+	  	{
+        	note: {
+            	title: "Phase 4",
+            	label: "Cold war era - USA skipping Olympics in 1980 & Russia missing 1984 event"
+          	},
+	  		year: "1984"
+	  	},
+	  	{
+        	note: {
+            	title: "Phase 5",
+            	label: "New world order - Emergence of China"
+          	},
+	  		year: "2012"
+	  	}
+	  ]
 
-/*
-      const annotations = [
-        {
-        	//type: d3.annotationCalloutCircle,
-          note: {
-            label: "Note -> Label",
-            //title: "d3.annotationLabel"
-          },
-          x: 50,
-          y: 150,
-          dx: 10,
-          dy: 20,
-          //color: "red"
-        }
-        ]
+	  annotations = d3.filter(annotations, d => d.year <= year)
 
-        const makeAnnotations = d3.annotation().annotations(annotations)
+	  annotations = annotations.map(d => {
+	  	d.type = d3.annotationLabel
+	  	d.x = x(d.year)
+        d.y = y(0)
+        d.dx = 0
+        d.dy = y(150) - y(0)
 
+	  	return d;
+	  })
+
+        makeAnnotations = d3.annotation().annotations(annotations)
         svg.append("g")
-          //.attr("class", "annotation-group")
+        	.attr("transform","translate("+settings.margin+","+ settings.margin+")")
+          .attr("class", "annotation-group")
           .call(makeAnnotations)
-*/
+
+
     //Scales - Y-axis
 	svg
 		.append("g")
