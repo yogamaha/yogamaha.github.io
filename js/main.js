@@ -698,6 +698,12 @@ function show_line_chart(year, scene_name, data, next_scene_caller) {
 		.attr("id", "Scene-5")
 		.attr("onclick", "build_scene_5()")
 
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("Drill down")
+		.attr("id", "drilldown")
+		.attr("onclick", "update_medal_details_drilldown_year('" + year + "')")
+
 	d3.select("#chart")
 		.attr("width", settings.width + 2*settings.margin)
 		.style("max-width", settings.width + 2*settings.margin)
@@ -963,18 +969,9 @@ function update_medal_details_drilldown() {
 
 }
 
-function get_medal_details_drilldown(data) {
-	console.log("get_medal_details_drilldown:Begin")
+function update_medal_details_drilldown_year(year) {
+	update_medal_details_scene_1(main_data, year + " Summer")
 
-	//summary_filter = d => (!filter_1 || d.Games == filter_1) && (!filter_2 || d.Region == filter_2) && (!filter_3 || d.Sport == filter_3) && (!filter_4 || d.Event == filter_4);
-	summary_filter = d => d.Games == filter_1 && d.Region == filter_2
-	data = d3.filter(data, summary_filter)
-	data = d3.rollup(data, v => v.length, d => d.Sex, d => d.Medal)
-	console.log(data)
-
-	console.log("get_medal_details_drilldown:End")
-
-	return data;	
 }
 
 //------------------------------------------------------------------------------------------------------------------
