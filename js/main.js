@@ -24,10 +24,6 @@ async function load_data() {
 		return row;
 	});
 
-	// Filter records without medals
-	data = post_process_data(data);
-	main_data = data;
-
 	file_name = "data/noc_regions.csv";
 	file_name = "https://raw.githubusercontent.com/yogamaha/yogamaha.github.io/main/data/noc_regions.csv";
 
@@ -36,9 +32,14 @@ async function load_data() {
 	// console.log("noc_regions_data=")
 	// console.log(noc_regions_data)
 
-	initialize_olympics_selector(data);
+	// Filter records without medals
+	data = post_process_data(data);
+	data = map_region_data(data, noc_regions_data);
+	main_data = data;
 
-	update_medals_summary(data, get_selected_year());
+	//initialize_olympics_selector(data);
+	//update_medal_details_scene_1(data, get_selected_year());
+	build_scene_1(data);
 
 	return data;
 }
@@ -81,6 +82,24 @@ function post_process_data(data) {
 
 }
 
+
+function map_region_data(data, noc_regions_data) {
+	console.log("map_region_data:Begin")
+
+	data = data.map(function(d) {
+		region = noc_regions_data.get(d.NOC)
+		d.Region = region;
+		return d;
+	}); 
+
+	console.log(data)
+
+	console.log("map_region_data:End")
+
+	return data;
+
+}
+
 function initialize_olympics_selector(data) {
 	console.log("initialize_olympics_selector:Begin")
 	data = d3.flatRollup(data, v => v.length, d => d.Games, d => d.City)
@@ -89,6 +108,8 @@ function initialize_olympics_selector(data) {
 		val = d3.descending(a[0], b[0])
 		return val;
 	});
+
+	d3.select("#input").append("span").text("Game Selector:")
 
 	d3.select("#input")
 		.append("select")
@@ -110,8 +131,12 @@ function initialize_olympics_selector(data) {
     // When the button is changed, run the updateChart function
     select_button.on("change", function(d) {
         // recover the option that has been chosen
-        update_medals_summary(main_data, get_selected_year())
+        update_medal_details_scene_1(main_data, get_selected_year())
     })
+
+    if (filter_1) {
+	    select_button.property('value', filter_1)
+    }
 
 	console.log("initialize_olympics_selector:End")
 	return data
@@ -131,13 +156,22 @@ function get_selected_year() {
 }
 
 function clear_page() {
+	d3.select("#heading").selectAll('*').remove();
+	d3.select("#nav").selectAll('*').remove();
+	d3.select("#input").selectAll('*').remove();
 	d3.select("#chart").selectAll('*').remove();
 	d3.select("#legend").selectAll('*').remove();
-	d3.select("#heading").selectAll('*').remove();
 	d3.select("#path").selectAll('*').remove();
+	clear_drilldown();
 }
 
-function format_data_for_viz(data) {
+function clear_drilldown() {
+	d3.select("#heading-2").selectAll('*').remove();
+	d3.select("#chart-2").selectAll('*').remove();
+	d3.select("#legend-2").selectAll('*').remove();
+}
+
+function format_data_for_viz(data, sort_data) {
 	console.log("format_data_for_viz:Begin")
 
 	data = [...data]
@@ -159,15 +193,17 @@ function format_data_for_viz(data) {
 
 	});
 
-	data = data.sort(function compare(a, b)  {
-		val = d3.descending(a[1].get("Total"), b[1].get("Total")) 
-			|| d3.descending(a[1].get("Gold"), b[1].get("Gold")) 
-			|| d3.descending(a[1].get("Silver"), b[1].get("Silver")) 
-			|| d3.descending(a[1].get("Bronze"), b[1].get("Bronze"))
+	if (sort_data) {
+		data = data.sort(function compare(a, b)  {
+			val = d3.descending(a[1].get("Total"), b[1].get("Total")) 
+				|| d3.descending(a[1].get("Gold"), b[1].get("Gold")) 
+				|| d3.descending(a[1].get("Silver"), b[1].get("Silver")) 
+				|| d3.descending(a[1].get("Bronze"), b[1].get("Bronze"))
 
 
-		return val;
-	});
+			return val;
+		});		
+	}
 	
 
 	//console.log([...data])
@@ -180,25 +216,33 @@ function format_data_for_viz(data) {
 }
 
 
-function show_medal_details(data, xaxis_tick_mapper, next_scene_caller) {
+function show_medal_details(data, xaxis_tick_mapper, next_scene_caller, sort_data = true) {
 	console.log("show_medal_details:Begin")
 
-	data = format_data_for_viz(data)
+	data = format_data_for_viz(data, sort_data)
 
 	settings = {
-		width : 600,
+		width : 2000,
 		height : 300,
 		margin : 50,
 		padding : 0.4,
 		barWidth: 25
 	}
 	graph_width = (settings.barWidth + settings.padding * settings.barWidth) * (data.length +1)
-	max_count = Math.ceil(data[0][1].get("Total")/10) * 10;
+	max_count = d3.max(data.map(d => d[1].get("Total")))
+	max_count = Math.ceil(max_count/10) * 10;
 
 	var x = d3.scaleBand().domain(data.map(d => d[0])).range([0, graph_width]).padding([settings.padding]);
 	var y = d3.scaleLinear().domain([0, max_count]).range([settings.height, 0])
 
 	clear_page();
+
+	initialize_olympics_selector(main_data);
+
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("Back")
+		.attr("onclick", "active_scene()")
 
 	d3.select("#chart")
 		.attr("width", settings.width + 2*settings.margin)
@@ -276,7 +320,6 @@ function show_medal_details(data, xaxis_tick_mapper, next_scene_caller) {
      })
 
 
-
     //Scales - Y-axis
 	svg
 		.append("g")
@@ -287,7 +330,7 @@ function show_medal_details(data, xaxis_tick_mapper, next_scene_caller) {
 	    .attr("text-anchor", "end")
 	    .attr("transform", "rotate(-90)")
 	    .attr("x", -settings.height/2)
-	    .attr("y", 10)
+	    .attr("y", 15)
 	    .text("Medal count")
 
 	//Scales - X-axis
@@ -311,20 +354,21 @@ function show_medal_details(data, xaxis_tick_mapper, next_scene_caller) {
     	.attr("transform", "rotate(90)")
     	.style("text-anchor", "start");
 
-	d3.select("#heading").append("h2").text("Olympic Medals")
+	d3.select("#heading").append("h2").text("Olympic Medals - Drill Down")
 
 	heading_setting = {
-		legend_x : 600,
+		width: 200,
+		height: 200,
+		legend_x : 50,
 		legend_y : 10,
 		legend_size : 20,
 		legend_margin : 25,
 	}
 
 	legend_svg = d3.select("#legend").append("svg")
-		.attr("width", "100%")
-		.attr("height", "100%")
-		//.style("max-width", settings.width + 2*settings.margin)
-		//.attr("height", settings.height + 2*settings.margin + 100)		
+		.attr("width", heading_setting.width)
+		.attr("height", heading_setting.height)
+		.append("g").selectAll()
 
 	legend_svg.selectAll("random")
 	  .data(subgroups)
@@ -358,12 +402,12 @@ function show_traversal_path() {
 	d3.select("#path").append("span").append("b").text("Drill Down Path:").append("br")
 	if (filter_1) {
 		path.append("span").text("Game:")
-		path.append("a").html(filter_1).attr("href", "javascript:update_medals_summary(main_data, filter_1);")
+		path.append("a").html(filter_1).attr("href", "javascript:update_medal_details_scene_1(main_data, filter_1);")
 		path.append("br")
 	}
 	if (filter_2) {
 		path.append("span").text("Country:")
-		path.append("a").html(noc_regions_data.get(filter_2)).attr("href", "javascript:update_medal_details_scene_2(main_data, filter_2);")
+		path.append("a").html(filter_2).attr("href", "javascript:update_medal_details_scene_2(main_data, filter_2);")
 		path.append("br")
 	}
 	if (filter_3) {
@@ -386,15 +430,15 @@ function show_traversal_path() {
 
 //Scene-1
 
-function update_medals_summary(data, filter) {
+function update_medal_details_scene_1(data, filter) {
 	filter_1 = filter;
 	filter_2 = null;
 	filter_3 = null;
 	filter_4 = null;
 	data = get_medal_details_scene_1(data);
 
-	//show_medals_summary(data);
-	xaxis_tick_mapper = (d,i) => noc_regions_data.get(d);
+	//xaxis_tick_mapper = (d,i) => noc_regions_data.get(d);
+	xaxis_tick_mapper = null;
 	next_scene_caller = update_medal_details_scene_2;
 	show_medal_details(data, xaxis_tick_mapper, next_scene_caller);
 
@@ -405,7 +449,7 @@ function get_medal_details_scene_1(data) {
 
 	summary_filter = d => d.Games == filter_1;
 	data = d3.filter(data, summary_filter)
-	data = d3.rollup(data, v => v.length, d => d.NOC, d => d.Medal)
+	data = d3.rollup(data, v => v.length, d => d.Region, d => d.Medal)
 
 	console.log(data)
 	//console.log(data.get("USA"))
@@ -432,7 +476,7 @@ function update_medal_details_scene_2(data, filter) {
 function get_medal_details_scene_2(data) {
 	console.log("get_medal_details_scene_2:Begin")
 
-	summary_filter = d => d.Games == filter_1 && d.NOC == filter_2;
+	summary_filter = d => d.Games == filter_1 && d.Region == filter_2;
 	data = d3.filter(data, summary_filter)
 	data = d3.rollup(data, v => v.length, d => d.Sport, d => d.Medal)
 	console.log(data)
@@ -460,7 +504,7 @@ function update_medal_details_scene_3(data, filter) {
 function get_medal_details_scene_3(data) {
 	console.log("get_medal_details_scene_3:Begin")
 
-	summary_filter = d => d.Games == filter_1 && d.NOC == filter_2 && d.Sport == filter_3;
+	summary_filter = d => d.Games == filter_1 && d.Region == filter_2 && d.Sport == filter_3;
 	data = d3.filter(data, summary_filter)
 	data = d3.rollup(data, v => v.length, d => d.Event, d => d.Medal)
 	console.log(data)
@@ -487,7 +531,7 @@ function update_medal_details_scene_4(data, filter_4) {
 function get_medal_details_scene_4(data) {
 	console.log("get_medal_details_scene_4:Begin")
 
-	summary_filter = d => d.Games == filter_1 && d.NOC == filter_2 && d.Sport == filter_3 && d.Event == filter_4;
+	summary_filter = d => d.Games == filter_1 && d.Region == filter_2 && d.Sport == filter_3 && d.Event == filter_4;
 	data = d3.filter(data, summary_filter)
 	data = d3.rollup(data, v => v.length, d => d.Sex, d => d.Medal)
 	console.log(data)
@@ -499,5 +543,405 @@ function get_medal_details_scene_4(data) {
 
 
 //------------------------------------------------------------------------------------------------------------------
+
+
+
+//Scene-1
+
+active_scene = null;
+function build_scene(year,scene, scene_name) {
+	active_scene = scene;
+	data = get_data_scene_1(main_data);
+
+	next_scene_caller = null;
+	show_line_chart(year, scene_name, data, next_scene_caller);
+
+}
+
+function build_scene_1() {
+	scene = build_scene_1;
+	year = 1920;
+	scene_name = "Scene-1";
+	build_scene(year, scene, scene_name)
+}
+
+function build_scene_2() {
+	scene = build_scene_2;
+	year = 1950;
+	scene_name = "Scene-2";
+	build_scene(year, scene, scene_name)
+}
+
+function build_scene_3() {
+	scene = build_scene_3;
+	year = 1984;
+	scene_name = "Scene-3";
+	build_scene(year, scene, scene_name)
+}
+
+function build_scene_4() {
+	scene = build_scene_4;
+	year = 2000;
+	scene_name = "Scene-4";
+	build_scene(year, scene, scene_name)
+}
+
+
+function build_scene_5() {
+	scene = build_scene_5;
+	year = 2020;
+	scene_name = "Scene-5";
+	build_scene(year, scene, scene_name)
+}
+
+function get_data_scene_1(data) {
+	console.log("get_data_scene_1:Begin")
+
+	summary_filter = d => d.Season == "Summer"
+	data = d3.filter(data, summary_filter)
+	data = data.sort(function (a, b)  {
+		//val = d3.descending(a[0], b[0])
+		val = d3.ascending(a.Year, b.Year)
+		return val;
+	});
+
+	data = d3.flatGroup(data, d => d.Region, d => d.Year, d => d.City)
+
+	data = data.map(d => {
+		medals = d3.rollup(d[3], v => v.length, d => d.Medal);
+		process_medals(medals);
+
+		tmp = d[3];
+
+		d[3] = medals.get("Total");
+		d.push(medals)
+		d.push(tmp)
+		return d;
+	})
+
+	console.log(data)
+	//console.log(data.get("USA"))
+	console.log("get_data_scene_1:End")
+
+	return data;
+}
+
+function process_medals(medals) {
+	if (!medals.get("Gold")) {
+		medals = medals.set("Gold", 0)
+	}
+	if (!medals.get("Silver")) {
+		medals = medals.set("Silver", 0)
+	}
+	if (!medals.get("Bronze")) {
+		medals = medals.set("Bronze", 0)
+	}
+
+	if (!medals.get("Total")) {
+		total = medals.get("Gold") + medals.get("Silver") + medals.get("Bronze")
+		medals.set("Total", total)
+	}
+}
+
+function show_line_chart(year, scene_name, data, next_scene_caller) {
+	console.log("show_line_chart:Begin")
+
+	settings = {
+		width : 1000,
+		height : 300,
+		margin : 50,
+		padding : 1,
+		barWidth: 10
+	}
+	//graph_width = (settings.barWidth + settings.padding * settings.barWidth) * (data.length +1)
+	graph_width = settings.width
+
+	max_count = d3.max(data.map(d => d[3]))
+	max_count = Math.ceil(max_count/10) * 10;
+	
+	x_axis_map = new Map(data.map(d => [d[1], d[1] + " " + d[2]]).sort((a,b) => d3.ascending(a[0], b[0])))
+
+	var x = d3.scaleBand()
+			//.domain(data.map(d => d[1]).sort((a,b) => d3.ascending(a, b)))
+			.domain(x_axis_map.keys())
+			.range([0, graph_width]).padding([settings.padding]);
+
+	//var x = d3.scaleLinear().domain([d3.min(data.map(d => d[1])), d3.max(data.map(d => d[1]))]).range([0, graph_width])
+	var y = d3.scaleLinear().domain([0, max_count]).range([settings.height, 0])
+
+	clear_page();
+
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("1")
+		.attr("id", "Scene-1")
+		.attr("onclick", "build_scene_1()")
+
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("2")
+		.attr("id", "Scene-2")
+		.attr("onclick", "build_scene_2()")
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("3")
+		.attr("id", "Scene-3")
+		.attr("onclick", "build_scene_3()")
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("4")
+		.attr("id", "Scene-4")
+		.attr("onclick", "build_scene_4()")
+	d3.select("#nav")
+		.append("button")//.selectAll()
+		.text("5")
+		.attr("id", "Scene-5")
+		.attr("onclick", "build_scene_5()")
+
+	d3.select("#chart")
+		.attr("width", settings.width + 2*settings.margin)
+		.style("max-width", settings.width + 2*settings.margin)
+		.attr("height", settings.height + 2*settings.margin + 100)
+
+	d3.select("#" + scene_name).style("background-color", "#555555")
+
+	svg = d3.select("#chart").append("svg")
+		.attr("width", graph_width + 2*settings.margin)
+		.attr("height", settings.height + 2*settings.margin + 100)
+
+country_list = ["USA", "Russia", "China", "UK", "France", "Japan", "Germany", "Sweden"]
+summary_filter = d => d[1] <= year && country_list.indexOf(d[0]) > -1
+//summary_filter = d => d.Season == "Summer" && ["USA"].indexOf(d.Region) > -1  //&& d.Year <= 1950
+data = d3.filter(data, summary_filter)
+
+x_points = data.map(d => d[1])
+
+var data = d3.groups(data, d => d[0]);
+
+
+var color = d3.scaleOrdinal()
+	//.domain(data.map(d => d[0]))
+	.domain(country_list)
+	.range(["blue", "red", "orange", "green", "brown", "violet", "pink", "grey", "slateblue", "grey1", "orange"])
+
+  svg
+	.append("g")
+	.attr("transform","translate("+settings.margin+","+ settings.margin+")")
+	//.attr("id", "test")	
+	.selectAll()
+	//.selectAll("#test")
+    .data(data).enter()
+	    .append("path")
+		    .attr("fill", "none")
+		    .attr("stroke", function(d){ return color(d[0]) })
+		    //.attr("stroke", "steelblue")
+		    .attr("stroke-width", 1.5)
+		    .attr("d", function(d){
+		    	fn = d3.line()
+		    	.curve(d3.curveCardinal)
+		    	.x(function(d) { 
+		    		return x(d[0])
+		    	})
+		        .y(function(d) { 
+		        	return y(d[1]) 
+		        })
+
+		        x_points_map = new Map()
+
+		        x_points.forEach(r => x_points_map.set(r, 0));
+
+		        d[1].forEach(r => {
+		        	key = r[1]
+		        	value = r[3]
+		        	x_points_map.set(key, value)
+		        })
+
+
+		        //return fn(d[1]);
+		        return fn(x_points_map.entries());
+		    })
+
+svg.append('g')
+	.attr("transform","translate("+settings.margin+","+ settings.margin+")")
+    .selectAll().data(data).enter()
+    	.append("g")
+		.selectAll().data(d => d[1]).enter()
+			.append("circle")
+		      .attr("cx", function (d) { 
+		      	return x(d[1]); 
+		      } )
+		      .attr("cy", function (d) { 
+		      	return y(d[3]); 
+		      } )
+		      .attr("r", 10)
+		      //.style("fill", "#69b3a2")
+		      .style("fill-opacity", "0")
+		    .on("mouseover", function(event,d) {
+		    	// console.log(d)
+		    	// console.log(event)
+		    	var tooltip = d3.select("#tooltip")
+		       
+		       tooltip.transition()
+		         .duration(200)
+		         .style("opacity", .9);
+		       
+		       country = d[0]
+		       year = d[1]
+		       medals_data = d[4];
+
+		       tooltip.html(
+		       	"Country: " + country + "<br/>" +
+		       	"Year: " + year + "<br/>" +
+		       	"Gold: " + medals_data.get("Gold") + "<br/>" +
+		      	"Silver: " + medals_data.get("Silver") + "<br/>" +
+		      	"Bronze: " + medals_data.get("Bronze") + "<br/>" +
+		      	"Total: " + medals_data.get("Total") + "<br/>")
+
+		         tooltip.style("left", (event.pageX))
+		         	.style("top", (event.pageY - 28));
+		       })
+		     .on("mouseout", function(event, d) {
+		     	var tooltip = d3.select("#tooltip")
+
+		       tooltip.transition()
+		         .duration(500)
+		         .style("opacity", 0);
+		       })
+		     .on("click", function(event, d) {
+		     	console.log(d);
+		     	filter_data = d[5][0];
+				filter_1 = filter_data.Games;
+				filter_2 = filter_data.Region;
+				filter_3 = null;
+				filter_4 = null;
+
+				update_medal_details_drilldown();
+		     })
+
+
+/*
+      const annotations = [
+        {
+        	//type: d3.annotationCalloutCircle,
+          note: {
+            label: "Note -> Label",
+            //title: "d3.annotationLabel"
+          },
+          x: 50,
+          y: 150,
+          dx: 10,
+          dy: 20,
+          //color: "red"
+        }
+        ]
+
+        const makeAnnotations = d3.annotation().annotations(annotations)
+
+        svg.append("g")
+          //.attr("class", "annotation-group")
+          .call(makeAnnotations)
+*/
+    //Scales - Y-axis
+	svg
+		.append("g")
+		.attr("transform","translate("+settings.margin+","+settings.margin+")")
+		.call(d3.axisLeft(y));
+
+	svg.append("text")
+	    .attr("text-anchor", "end")
+	    .attr("transform", "rotate(-90)")
+	    .attr("x", -settings.height/2)
+	    .attr("y", 15)
+	    .text("Medal count")
+
+	//Scales - X-axis
+	xAxisGenerator = d3.axisBottom(x);
+
+	xAxisGenerator.tickFormat((d,i) => {
+		//return noc_regions_data.get(d);
+		return x_axis_map.get(d);
+	});
+
+	svg
+		.append("g")
+		.attr("transform","translate("+settings.margin+","+ (settings.height + settings.margin) +")")
+		.call(xAxisGenerator)
+	.selectAll("text")
+  		.attr("y", 0)
+    	.attr("x", 9)
+    	.attr("transform", "rotate(90)")
+    	.style("text-anchor", "start");
+
+	d3.select("#heading").append("h2").text("Olympic Medals - Performance Overtime")
+
+	heading_setting = {
+		width: 200,
+		height: 200,
+		legend_x : 50,
+		legend_y : 10,
+		legend_size : 20,
+		legend_margin : 25,
+	}
+
+	legend_svg = d3.select("#legend").append("svg")
+		.attr("width", heading_setting.width)
+		.attr("height", heading_setting.height)
+		.append("g").selectAll()
+
+	legend_svg
+	  .data(country_list)
+	  .enter()
+	  .append("rect")
+	    .attr("x", heading_setting.legend_x)
+	    .attr("y", function(d,i){ return heading_setting.legend_y + i*25}) // 100 is where the first dot appears. 25 is the distance between dots
+	    .attr("width", heading_setting.legend_size)
+	    .attr("height", heading_setting.legend_size)
+	    .style("fill", function(d){ return color(d)})
+
+	legend_svg
+	  .data(country_list)
+	  .enter()
+	  .append("text")
+	    .attr("x", heading_setting.legend_x + heading_setting.legend_size *1.2 )
+	    .attr("y", function(d,i){ return heading_setting.legend_y + i*(heading_setting.legend_size+5) + (heading_setting.legend_size/2)}) // 100 is where the first dot appears. 25 is the distance between dots
+	    .text(function(d){ return d})
+	    .attr("text-anchor", "left")
+	    .style("alignment-baseline", "middle")
+
+	console.log("show_line_chart:End")
+	return data;	
+}
+
+//------------------------------------------------------------------------------------------------------------------
+
+//Drill-down
+
+function update_medal_details_drilldown() {
+	update_medal_details_scene_2(main_data, filter_2)
+	// data = get_medal_details_drilldown(main_data);
+
+
+	// xaxis_tick_mapper = null;
+	// next_scene_caller = null;
+	// show_medal_details(data, xaxis_tick_mapper, next_scene_caller);
+
+}
+
+function get_medal_details_drilldown(data) {
+	console.log("get_medal_details_drilldown:Begin")
+
+	//summary_filter = d => (!filter_1 || d.Games == filter_1) && (!filter_2 || d.Region == filter_2) && (!filter_3 || d.Sport == filter_3) && (!filter_4 || d.Event == filter_4);
+	summary_filter = d => d.Games == filter_1 && d.Region == filter_2
+	data = d3.filter(data, summary_filter)
+	data = d3.rollup(data, v => v.length, d => d.Sex, d => d.Medal)
+	console.log(data)
+
+	console.log("get_medal_details_drilldown:End")
+
+	return data;	
+}
+
+//------------------------------------------------------------------------------------------------------------------
+
 
 load_data();
